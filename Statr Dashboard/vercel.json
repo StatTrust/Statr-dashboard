@@ -1,0 +1,11 @@
+{
+  "rewrites": [
+    { "source": "/api/inngest",        "destination": "/api/router?route=inngest" },
+    { "source": "/api/jobs-test",      "destination": "/api/router?route=jobs-test" },
+    { "source": "/api/debug/env",      "destination": "/api/router?route=debug-env" },
+    { "source": "/api/debug/kv",       "destination": "/api/router?route=debug-kv" },
+
+    { "source": "/api/jobs",           "destination": "/api/router?route=jobs" },
+    { "source": "/api/jobs/(.*)",      "destination": "/api/router?route=job-status&id=$1" }
+  ]
+}
