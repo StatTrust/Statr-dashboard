@@ -1,0 +1,16 @@
+{
+  "name": "statr-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "check": "node --check lib/statrMlb.js && node --check api/mlb-data.js && node --check api/cron-mlb-due.js && node --check api/cron-mlb-settle.js && node --check dashboard/app.js"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.11.19"
+  }
+}
