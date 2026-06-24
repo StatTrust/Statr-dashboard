@@ -1,3 +1,4 @@
+const apiPath = "/api/mlb-data";
 const csvPath = "../data/statr-mlb-picks.csv";
 const unitSize = 50;
 
@@ -116,7 +117,13 @@ function renderPicks(rows) {
 async function main() {
   let rows = [];
   try {
-    rows = parseCsv(await fetch(csvPath, { cache: "no-store" }).then((r) => (r.ok ? r.text() : "")));
+    const response = await fetch(apiPath, { cache: "no-store" });
+    if (response.ok) {
+      const payload = await response.json();
+      rows = Array.isArray(payload.rows) ? payload.rows : [];
+    } else {
+      rows = parseCsv(await fetch(csvPath, { cache: "no-store" }).then((r) => (r.ok ? r.text() : "")));
+    }
   } catch {
     rows = [];
   }

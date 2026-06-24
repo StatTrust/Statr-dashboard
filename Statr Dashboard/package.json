@@ -1,5 +1,5 @@
 {
-  "name": "mlb-scraper",
+  "name": "statr-dashboard",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -7,16 +7,9 @@
     "node": "22.x"
   },
   "scripts": {
-    "statr:mlb:due": "node tools/statr-mlb-workflow.js due",
-    "statr:mlb:settle": "node tools/statr-mlb-workflow.js settle",
-    "statr:mlb:summary": "node tools/statr-mlb-workflow.js summary",
-    "statr:dashboard": "node tools/serve-dashboard.js"
+    "check": "node --check lib/statrMlb.js && node --check api/mlb-data.js && node --check api/cron-mlb-due.js && node --check api/cron-mlb-settle.js && node --check dashboard/app.js"
   },
-  "dependencies": {
-    "@aws-sdk/client-s3": "^3.884.0",
-    "@upstash/redis": "^1.35.5",
-    "inngest": "^3.54.2"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^20.11.19"
   }
