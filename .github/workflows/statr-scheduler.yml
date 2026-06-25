@@ -11,6 +11,18 @@ on:
         options:
           - due
           - settle
+      date:
+        description: "Optional slate date, like 2026-06-24"
+        required: false
+        type: string
+      force:
+        description: "Force all games for the selected date"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
   schedule:
     - cron: "*/5 * * * *"
     - cron: "30 8 * * *"
@@ -35,11 +47,35 @@ jobs:
             TASK="due"
           fi
 
-          if [[ "$TASK" == "settle" ]]; then
-            echo "path=/api/cron-mlb-settle" >> "$GITHUB_OUTPUT"
-          else
-            echo "path=/api/cron-mlb-due" >> "$GITHUB_OUTPUT"
+          DATE=""
+          FORCE="false"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            DATE="${{ inputs.date }}"
+            FORCE="${{ inputs.force }}"
           fi
+
+          if [[ "$TASK" == "settle" ]]; then
+            PATH_TO_CALL="/api/cron-mlb-settle"
+          else
+            PATH_TO_CALL="/api/cron-mlb-due"
+          fi
+
+          QUERY=""
+          if [[ -n "$DATE" ]]; then
+            QUERY="date=$DATE"
+          fi
+          if [[ "$FORCE" == "true" ]]; then
+            if [[ -n "$QUERY" ]]; then
+              QUERY="$QUERY&force=true"
+            else
+              QUERY="force=true"
+            fi
+          fi
+          if [[ -n "$QUERY" ]]; then
+            PATH_TO_CALL="$PATH_TO_CALL?$QUERY"
+          fi
+
+          echo "path=$PATH_TO_CALL" >> "$GITHUB_OUTPUT"
 
       - name: Trigger Vercel endpoint
         env:
