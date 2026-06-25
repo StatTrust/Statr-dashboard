@@ -1,0 +1,57 @@
+name: Statr MLB Scheduler
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Task to run"
+        required: true
+        default: "due"
+        type: choice
+        options:
+          - due
+          - settle
+  schedule:
+    - cron: "*/5 * * * *"
+    - cron: "30 8 * * *"
+
+concurrency:
+  group: statr-mlb-scheduler
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Choose endpoint
+        id: endpoint
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TASK="${{ inputs.task }}"
+          elif [[ "${{ github.event.schedule }}" == "30 8 * * *" ]]; then
+            TASK="settle"
+          else
+            TASK="due"
+          fi
+
+          if [[ "$TASK" == "settle" ]]; then
+            echo "path=/api/cron-mlb-settle" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=/api/cron-mlb-due" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Trigger Vercel endpoint
+        env:
+          VERCEL_APP_URL: ${{ secrets.VERCEL_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PATH_TO_CALL: ${{ steps.endpoint.outputs.path }}
+        run: |
+          test -n "$VERCEL_APP_URL"
+          test -n "$CRON_SECRET"
+          curl --fail --show-error --silent \
+            --max-time 290 \
+            --retry 1 \
+            --retry-delay 10 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$VERCEL_APP_URL$PATH_TO_CALL"
