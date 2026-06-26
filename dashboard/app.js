@@ -1,6 +1,39 @@
 const apiPath = "/api/mlb-data";
 const csvPath = "../data/statr-mlb-picks.csv";
-const unitSize = 50;
+const unitSize = 100;
+
+const TEAM_META = {
+  "Arizona Diamondbacks": ["ARI", "Diamondbacks"],
+  Athletics: ["ATH", "Athletics"],
+  "Atlanta Braves": ["ATL", "Braves"],
+  "Baltimore Orioles": ["BAL", "Orioles"],
+  "Boston Red Sox": ["BOS", "Red Sox"],
+  "Chicago Cubs": ["CHC", "Cubs"],
+  "Chicago White Sox": ["CWS", "White Sox"],
+  "Cincinnati Reds": ["CIN", "Reds"],
+  "Cleveland Guardians": ["CLE", "Guardians"],
+  "Colorado Rockies": ["COL", "Rockies"],
+  "Detroit Tigers": ["DET", "Tigers"],
+  "Houston Astros": ["HOU", "Astros"],
+  "Kansas City Royals": ["KC", "Royals"],
+  "Los Angeles Angels": ["LAA", "Angels"],
+  "Los Angeles Dodgers": ["LAD", "Dodgers"],
+  "Miami Marlins": ["MIA", "Marlins"],
+  "Milwaukee Brewers": ["MIL", "Brewers"],
+  "Minnesota Twins": ["MIN", "Twins"],
+  "New York Mets": ["NYM", "Mets"],
+  "New York Yankees": ["NYY", "Yankees"],
+  "Philadelphia Phillies": ["PHI", "Phillies"],
+  "Pittsburgh Pirates": ["PIT", "Pirates"],
+  "San Diego Padres": ["SD", "Padres"],
+  "San Francisco Giants": ["SF", "Giants"],
+  "Seattle Mariners": ["SEA", "Mariners"],
+  "St. Louis Cardinals": ["STL", "Cardinals"],
+  "Tampa Bay Rays": ["TB", "Rays"],
+  "Texas Rangers": ["TEX", "Rangers"],
+  "Toronto Blue Jays": ["TOR", "Blue Jays"],
+  "Washington Nationals": ["WSH", "Nationals"],
+};
 
 function parseCsv(text) {
   const rows = [];
@@ -68,6 +101,12 @@ function stats(rows) {
   return { settled, wins, losses, pushes, net, staked, wr, roi };
 }
 
+function activeStake(rows) {
+  return rows
+    .filter((r) => ["pending", "won", "lost", "push"].includes(r.status))
+    .reduce((sum, r) => sum + Number(r.stake || 0), 0);
+}
+
 function renderMetric(prefix, rows) {
   const s = stats(rows);
   document.getElementById(`${prefix}-record`).textContent = `${s.wins}-${s.losses}${s.pushes ? `-${s.pushes}` : ""}`;
@@ -79,11 +118,57 @@ function renderMetric(prefix, rows) {
   if (settledEl) settledEl.textContent = `${s.settled.length} settled`;
 }
 
+function cleanPick(value = "") {
+  return String(value || "")
+    .replace(/\*\*/g, "")
+    .replace(/^signal\s*:\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatOdds(value) {
+  const odds = Number(value);
+  if (!Number.isFinite(odds) || odds === 0) return "odds TBD";
+  return odds > 0 ? `+${odds}` : String(odds);
+}
+
+function teamMeta(name = "") {
+  if (TEAM_META[name]) return { abbr: TEAM_META[name][0], name: TEAM_META[name][1] };
+  const parts = String(name || "").split(" ").filter(Boolean);
+  return { abbr: parts[0]?.slice(0, 3).toUpperCase() || "MLB", name: parts.slice(1).join(" ") || name };
+}
+
+function matchupHtml(row) {
+  const away = teamMeta(row.awayTeam);
+  const home = teamMeta(row.homeTeam);
+  return `<span class="team-main">${away.abbr} ${away.name}</span><span class="versus">vs</span><span class="team-alt">${home.abbr} ${home.name}</span>`;
+}
+
+function confidencePct(row) {
+  const match = String(row.confidence || "").match(/(\d+(?:\.\d+)?)\s*%/);
+  return match ? Number(match[1]) : 0;
+}
+
+function confidenceLabel(row) {
+  const raw = String(row.confidence || "").trim();
+  if (!raw) return row.status === "analyzing" ? "ANALYZING" : "TRACKED PICK";
+  return raw.replace(/\s*\([^)]*\)/g, "").replace(/[≈~]/g, "").trim().toUpperCase() || "TRACKED PICK";
+}
+
+function signalText(row) {
+  if (row.status === "analyzing") return "Analysis running";
+  if (row.status === "no_signal") return "No Signal";
+  return cleanPick(row.pick) || "Tracked Pick";
+}
+
 function strengthCount(row) {
+  if (["no_signal", "error"].includes(row.status)) return 0;
   const blob = `${row.confidence} ${row.pick}`.toLowerCase();
-  if (blob.includes("strong")) return 3;
-  if (blob.includes("solid") || blob.includes("lean")) return 2;
-  return row.status === "no_signal" ? 0 : 1;
+  const pct = confidencePct(row);
+  if (blob.includes("strong") || pct >= 70) return 3;
+  if (blob.includes("solid") || blob.includes("medium") || pct >= 60) return 2;
+  if (row.status === "pending" || row.status === "analyzing") return 1;
+  return 0;
 }
 
 function renderPicks(rows) {
@@ -97,18 +182,20 @@ function renderPicks(rows) {
     const count = strengthCount(row);
     const pnl = Number(row.profitLoss || 0);
     const resultLabel = row.status === "pending" ? "Pending" : row.status.replace("_", " ");
+    const showAmount = ["won", "lost", "push"].includes(row.status);
     const balls = [0, 1, 2].map((i) => `<span class="ball ${i < count ? "" : "empty"}"></span>`).join("");
     const item = document.createElement("article");
-    item.className = "pick-row";
+    item.className = `pick-row status-${row.status}`;
     item.innerHTML = `
       <div class="strength">${balls}</div>
       <div class="pick-main">
-        <strong>${row.pick || `${row.awayTeam} @ ${row.homeTeam}`}</strong>
-        <small>${row.confidence || "Tracked pick"} &middot; ${row.americanOdds || "odds TBD"} &middot; $${Number(row.stake || 0)} stake</small>
+        <div class="matchup-line">${matchupHtml(row)}</div>
+        <div class="signal-line">${signalText(row)}</div>
+        <div class="meta-line">${confidenceLabel(row)} &middot; ${formatOdds(row.americanOdds)} &middot; $${Number(row.stake || 0)} stake</div>
       </div>
       <div class="result ${pnl > 0 ? "positive" : pnl < 0 ? "negative" : ""}">
         ${resultLabel}
-        <strong>${row.status === "pending" || row.status === "no_signal" ? "" : money(pnl, 2)}</strong>
+        <strong>${showAmount ? money(pnl, 2) : ""}</strong>
       </div>`;
     list.appendChild(item);
   }
@@ -138,11 +225,11 @@ async function main() {
     year: "numeric",
   });
   document.getElementById("daily-record").textContent = `${dailyStats.wins}-${dailyStats.losses}`;
-  document.getElementById("daily-staked").textContent = money(dailyStats.staked, 0);
+  document.getElementById("daily-staked").textContent = money(activeStake(daily), 0);
   setMoney("daily-net", dailyStats.net, 2);
   renderPicks(daily);
   renderMetric("season", rows);
-  renderMetric("top", rows.filter((r) => /strong|solid/i.test(`${r.confidence} ${r.pick}`)));
+  renderMetric("top", rows.filter((r) => /strong|solid|medium/i.test(`${r.confidence} ${r.pick}`)));
 }
 
 main();

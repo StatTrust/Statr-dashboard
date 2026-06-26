@@ -88,10 +88,10 @@ h1 {
 
 .pick-row {
   display: grid;
-  grid-template-columns: 132px 1fr auto;
-  gap: 26px;
+  grid-template-columns: 132px minmax(0, 1fr) 160px;
+  gap: 24px;
   align-items: center;
-  min-height: 124px;
+  min-height: 136px;
   padding: 24px 30px;
   border-bottom: 1px solid var(--line);
 }
@@ -118,20 +118,55 @@ h1 {
   background: transparent;
 }
 
-.pick-main strong {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 28px;
+.pick-main {
+  min-width: 0;
 }
 
+.matchup-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 8px;
+  font-size: clamp(25px, 3.2vw, 34px);
+  font-weight: 850;
+  line-height: 1.12;
+}
+
+.team-main {
+  color: var(--text);
+}
+
+.versus,
+.team-alt {
+  color: rgba(238, 242, 248, 0.56);
+  font-weight: 750;
+}
+
+.signal-line {
+  margin-bottom: 8px;
+  color: #dfe5ee;
+  font-size: clamp(18px, 2.2vw, 24px);
+  font-weight: 800;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.meta-line,
 .pick-main small {
   color: #cbd3dc;
   font-size: 18px;
+  font-weight: 650;
   text-transform: uppercase;
 }
 
+.status-no_signal .signal-line,
+.status-analyzing .signal-line {
+  color: rgba(203, 211, 220, 0.78);
+}
+
 .result {
-  min-width: 128px;
+  min-width: 150px;
   text-align: right;
   font-size: 18px;
   font-weight: 800;
@@ -252,6 +287,16 @@ h1 {
 
   .pick-row {
     gap: 14px;
+    padding: 22px;
+  }
+
+  .strength {
+    gap: 8px;
+  }
+
+  .ball {
+    width: 30px;
+    height: 30px;
   }
 
   .result {
