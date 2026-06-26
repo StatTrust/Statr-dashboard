@@ -103,4 +103,6 @@ jobs:
 
           if [[ "${{ github.event_name }}" != "workflow_dispatch" && "$PATH_TO_CALL" == /api/cron-mlb-due* ]]; then
             call_endpoint "/api/cron-mlb-poll"
+            call_endpoint "/api/cron-mlb-settle"
+
           fi

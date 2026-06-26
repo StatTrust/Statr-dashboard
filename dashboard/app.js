@@ -157,8 +157,21 @@ function confidenceLabel(row) {
 
 function signalText(row) {
   if (row.status === "analyzing") return "Analysis running";
-  if (row.status === "no_signal") return "No Signal";
+  if (row.status === "no_signal") return "Pass - No Signal";
   return cleanPick(row.pick) || "Tracked Pick";
+}
+
+function statusLabel(row) {
+  const labels = {
+    pending: "Open",
+    no_signal: "Pass",
+    analyzing: "Analyzing",
+    won: "Won",
+    lost: "Lost",
+    push: "Push",
+    error: "Error",
+  };
+  return labels[row.status] || String(row.status || "tracked").replace("_", " ");
 }
 
 function strengthCount(row) {
@@ -181,7 +194,7 @@ function renderPicks(rows) {
   for (const row of rows) {
     const count = strengthCount(row);
     const pnl = Number(row.profitLoss || 0);
-    const resultLabel = row.status === "pending" ? "Pending" : row.status.replace("_", " ");
+    const resultLabel = statusLabel(row);
     const showAmount = ["won", "lost", "push"].includes(row.status);
     const balls = [0, 1, 2].map((i) => `<span class="ball ${i < count ? "" : "empty"}"></span>`).join("");
     const item = document.createElement("article");
