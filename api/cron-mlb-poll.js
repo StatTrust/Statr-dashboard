@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   try {
     const result = await pollQueuedAnalyses({
       date: req.query?.date || "",
-      limit: Number(req.query?.limit || process.env.STATR_POLL_LIMIT || 5),
+      limit: Number(req.query?.limit || process.env.STATR_POLL_LIMIT || 500),
     });
     return json(res, 200, { ok: true, ...result });
   } catch (err) {

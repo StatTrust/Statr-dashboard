@@ -2,6 +2,12 @@ const apiPath = "/api/mlb-data";
 const csvPath = "../data/statr-mlb-picks.csv";
 const unitSize = 100;
 
+const MARKETS = [
+  { key: "moneyline", label: "Moneyline" },
+  { key: "spread", label: "Spread" },
+  { key: "total", label: "Over/Under" },
+];
+
 const TEAM_META = {
   "Arizona Diamondbacks": ["ARI", "Diamondbacks"],
   Athletics: ["ATH", "Athletics"],
@@ -44,15 +50,15 @@ function parseCsv(text) {
     const ch = text[i];
     const next = text[i + 1];
     if (quoted) {
-      if (ch === '"' && next === '"') {
-        field += '"';
+      if (ch === "\"" && next === "\"") {
+        field += "\"";
         i += 1;
-      } else if (ch === '"') {
+      } else if (ch === "\"") {
         quoted = false;
       } else {
         field += ch;
       }
-    } else if (ch === '"') {
+    } else if (ch === "\"") {
       quoted = true;
     } else if (ch === ",") {
       row.push(field);
@@ -72,6 +78,14 @@ function parseCsv(text) {
   }
   const headers = rows.shift() || [];
   return rows.filter((r) => r.length).map((r) => Object.fromEntries(headers.map((h, i) => [h, r[i] || ""])));
+}
+
+function normalizeMarket(value = "") {
+  const raw = String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  if (["runline", "spread", "line"].includes(raw)) return "spread";
+  if (["total", "totals", "overunder", "ou", "over", "under"].includes(raw)) return "total";
+  if (["moneyline", "money", "ml"].includes(raw)) return "moneyline";
+  return raw;
 }
 
 function money(value, digits = 0) {
@@ -144,25 +158,35 @@ function matchupHtml(row) {
   return `<span class="team-main">${away.abbr} ${away.name}</span><span class="versus">vs</span><span class="team-alt">${home.abbr} ${home.name}</span>`;
 }
 
+function gameTime(row) {
+  if (!row?.gameTimeUtc) return "Time TBD";
+  return new Date(row.gameTimeUtc).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
 function confidencePct(row) {
-  const match = String(row.confidence || "").match(/(\d+(?:\.\d+)?)\s*%/);
+  const match = String(row?.confidence || "").match(/(\d+(?:\.\d+)?)\s*%/);
   return match ? Number(match[1]) : 0;
 }
 
 function confidenceLabel(row) {
-  const raw = String(row.confidence || "").trim();
-  if (!raw) return row.status === "analyzing" ? "ANALYZING" : "TRACKED PICK";
-  return raw.replace(/\s*\([^)]*\)/g, "").replace(/[≈~]/g, "").trim().toUpperCase() || "TRACKED PICK";
+  const raw = String(row?.confidence || "").trim();
+  if (raw) return raw.replace(/\s*\([^)]*\)/g, "").replace(/[≈~]/g, "").trim().toUpperCase() || "TRACKED";
+  if (row?.status === "scheduled") return "NOT QUEUED";
+  if (row?.status === "analyzing") return "ANALYZING";
+  return "TRACKED";
 }
 
 function signalText(row) {
+  if (!row || row.status === "scheduled") return "Awaiting 2-hour window";
   if (row.status === "analyzing") return "Analysis running";
   if (row.status === "no_signal") return "Pass - No Signal";
+  if (row.status === "error") return "Analysis error";
   return cleanPick(row.pick) || "Tracked Pick";
 }
 
 function statusLabel(row) {
   const labels = {
+    scheduled: "Scheduled",
     pending: "Open",
     no_signal: "Pass",
     analyzing: "Analyzing",
@@ -171,44 +195,86 @@ function statusLabel(row) {
     push: "Push",
     error: "Error",
   };
-  return labels[row.status] || String(row.status || "tracked").replace("_", " ");
+  return labels[row?.status] || String(row?.status || "scheduled").replace("_", " ");
 }
 
 function strengthCount(row) {
-  if (["no_signal", "error"].includes(row.status)) return 0;
+  if (!row || ["scheduled", "no_signal", "error"].includes(row.status)) return 0;
   const blob = `${row.confidence} ${row.pick}`.toLowerCase();
   const pct = confidencePct(row);
   if (blob.includes("strong") || pct >= 70) return 3;
   if (blob.includes("solid") || blob.includes("medium") || pct >= 60) return 2;
-  if (row.status === "pending" || row.status === "analyzing") return 1;
+  if (["pending", "analyzing", "won", "lost", "push"].includes(row.status)) return 1;
   return 0;
+}
+
+function strengthBalls(row) {
+  const count = strengthCount(row);
+  return [0, 1, 2].map((i) => `<span class="ball ${i < count ? "" : "empty"}"></span>`).join("");
+}
+
+function groupGames(rows) {
+  const groups = new Map();
+  for (const row of rows) {
+    const key = `${row.date}:${row.gamePk || row.matchupId}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        lead: row,
+        markets: new Map(),
+      });
+    }
+    const group = groups.get(key);
+    const market = normalizeMarket(row.market);
+    if (!group.markets.has(market) || group.markets.get(market).status === "scheduled") {
+      group.markets.set(market, { ...row, market });
+    }
+    if (group.lead.status === "scheduled" && row.status !== "scheduled") group.lead = row;
+  }
+  return [...groups.values()].sort((a, b) => new Date(a.lead.gameTimeUtc || 0) - new Date(b.lead.gameTimeUtc || 0));
+}
+
+function renderMarketTile(row, market) {
+  const pnl = Number(row?.profitLoss || 0);
+  const showAmount = ["won", "lost", "push"].includes(row?.status);
+  const status = row?.status || "scheduled";
+  return `
+    <article class="market-card status-${status}">
+      <div class="market-topline">
+        <span>${market.label}</span>
+        <span class="status-pill">${statusLabel(row)}</span>
+      </div>
+      <div class="market-signal">${signalText(row)}</div>
+      <div class="market-meta">${confidenceLabel(row)} · ${formatOdds(row?.americanOdds)} · $${Number(row?.stake || 0)} stake</div>
+      <div class="market-bottom">
+        <div class="strength compact">${strengthBalls(row)}</div>
+        <strong class="market-pnl ${pnl > 0 ? "positive" : pnl < 0 ? "negative" : ""}">${showAmount ? money(pnl, 2) : ""}</strong>
+      </div>
+    </article>`;
 }
 
 function renderPicks(rows) {
   const list = document.getElementById("pick-list");
   list.innerHTML = "";
   if (!rows.length) {
-    list.innerHTML = '<div class="pick-row"><div></div><div class="pick-main"><strong>No tracked picks yet</strong><small>Run the workflow to populate this slate.</small></div><div></div></div>';
+    list.innerHTML = '<div class="empty-state"><strong>No MLB matchups found</strong><small>The slate will appear here once schedule data is available.</small></div>';
     return;
   }
-  for (const row of rows) {
-    const count = strengthCount(row);
-    const pnl = Number(row.profitLoss || 0);
-    const resultLabel = statusLabel(row);
-    const showAmount = ["won", "lost", "push"].includes(row.status);
-    const balls = [0, 1, 2].map((i) => `<span class="ball ${i < count ? "" : "empty"}"></span>`).join("");
+
+  for (const group of groupGames(rows)) {
+    const tracked = MARKETS.filter((market) => ["analyzing", "pending", "won", "lost", "push", "no_signal", "error"].includes(group.markets.get(market.key)?.status)).length;
     const item = document.createElement("article");
-    item.className = `pick-row status-${row.status}`;
+    item.className = "game-card";
     item.innerHTML = `
-      <div class="strength">${balls}</div>
-      <div class="pick-main">
-        <div class="matchup-line">${matchupHtml(row)}</div>
-        <div class="signal-line">${signalText(row)}</div>
-        <div class="meta-line">${confidenceLabel(row)} &middot; ${formatOdds(row.americanOdds)} &middot; $${Number(row.stake || 0)} stake</div>
+      <div class="game-header">
+        <div class="game-heading">
+          <div class="matchup-line">${matchupHtml(group.lead)}</div>
+          <div class="game-meta">${gameTime(group.lead)} · ${tracked}/3 markets tracked</div>
+        </div>
+        <div class="game-due">2hr analysis</div>
       </div>
-      <div class="result ${pnl > 0 ? "positive" : pnl < 0 ? "negative" : ""}">
-        ${resultLabel}
-        <strong>${showAmount ? money(pnl, 2) : ""}</strong>
+      <div class="market-grid">
+        ${MARKETS.map((market) => renderMarketTile(group.markets.get(market.key), market)).join("")}
       </div>`;
     list.appendChild(item);
   }
@@ -227,6 +293,7 @@ async function main() {
   } catch {
     rows = [];
   }
+  rows = rows.map((row) => ({ ...row, market: normalizeMarket(row.market) }));
   const dates = [...new Set(rows.map((r) => r.date).filter(Boolean))].sort();
   const slateDate = dates.at(-1) || new Date().toISOString().slice(0, 10);
   const daily = rows.filter((r) => r.date === slateDate);

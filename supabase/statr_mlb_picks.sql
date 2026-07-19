@@ -8,10 +8,10 @@ create table if not exists public.statr_mlb_picks (
   away_team text,
   home_team text,
   pick text,
-  market text,
+  market text not null default 'moneyline',
   confidence text,
   american_odds integer,
-  stake numeric(12, 2) default 50,
+  stake numeric(12, 2) default 100,
   status text not null default 'pending',
   profit_loss numeric(12, 2),
   job_id text,
@@ -19,12 +19,43 @@ create table if not exists public.statr_mlb_picks (
   analysis_text text,
   notes text,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (game_pk, matchup_id)
+  updated_at timestamptz not null default now()
 );
+
+alter table public.statr_mlb_picks
+  alter column market set default 'moneyline';
+
+update public.statr_mlb_picks
+set market = 'moneyline'
+where market is null;
+
+alter table public.statr_mlb_picks
+  alter column market set not null;
+
+alter table public.statr_mlb_picks
+  alter column stake set default 100;
+
+alter table public.statr_mlb_picks
+  drop constraint if exists statr_mlb_picks_game_pk_matchup_id_key;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'statr_mlb_picks_game_market_key'
+      and conrelid = 'public.statr_mlb_picks'::regclass
+  ) then
+    alter table public.statr_mlb_picks
+      add constraint statr_mlb_picks_game_market_key unique (game_pk, matchup_id, market);
+  end if;
+end $$;
 
 create index if not exists statr_mlb_picks_date_idx
   on public.statr_mlb_picks (date desc, game_time_utc asc);
+
+create index if not exists statr_mlb_picks_date_market_idx
+  on public.statr_mlb_picks (date desc, market, game_time_utc asc);
 
 create or replace function public.set_statr_mlb_picks_updated_at()
 returns trigger
