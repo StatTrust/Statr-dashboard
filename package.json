@@ -7,7 +7,7 @@
     "node": "22.x"
   },
   "scripts": {
-    "check": "node --check lib/statrMlb.js && node --check api/mlb-data.js && node --check api/cron-mlb-due.js && node --check api/cron-mlb-poll.js && node --check api/cron-mlb-settle.js && node --check dashboard/app.js"
+    "check": "node --check lib/statrMlb.js && node --check api/mlb-data.js && node --check api/analysis-control.js && node --check api/cron-mlb-due.js && node --check api/cron-mlb-poll.js && node --check api/cron-mlb-settle.js && node --check dashboard/app.js && node --check dashboard/control.js"
   },
   "dependencies": {},
   "devDependencies": {

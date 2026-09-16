@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <title>Statr Analysis Control</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/dashboard/control.css" />
+  </head>
+  <body>
+    <main class="control-shell">
+      <section class="control-card">
+        <span class="eyebrow">Private operations</span>
+        <h1>Dashboard analysis</h1>
+        <p class="intro">Pause paid automatic MLB market analyses without stopping fresh matchup data, queued-job polling, or game settlement.</p>
+
+        <form id="auth-form" class="auth-form">
+          <label for="admin-secret">Admin secret</label>
+          <div class="auth-row">
+            <input id="admin-secret" name="admin-secret" type="password" autocomplete="current-password" required />
+            <button type="submit">Unlock</button>
+          </div>
+        </form>
+
+        <div id="control-panel" class="control-panel" hidden>
+          <div>
+            <span id="status-pill" class="status-pill">Checking</span>
+            <h2 id="status-title">Loading status…</h2>
+            <p id="status-detail">Checking the server-owned runtime setting.</p>
+          </div>
+          <button id="toggle-button" class="toggle-button" type="button" disabled>Loading…</button>
+          <p id="updated-at" class="updated-at"></p>
+        </div>
+
+        <p id="message" class="message" role="status" aria-live="polite"></p>
+      </section>
+    </main>
+    <script src="/dashboard/control.js"></script>
+  </body>
+</html>

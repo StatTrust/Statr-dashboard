@@ -7,6 +7,10 @@
     {
       "source": "/mlb-dashboard",
       "destination": "/dashboard/index.html"
+    },
+    {
+      "source": "/mlb-dashboard/control",
+      "destination": "/dashboard/control.html"
     }
   ]
 }
