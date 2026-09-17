@@ -4,6 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Statr MLB Slate</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,0,0&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/dashboard/styles.css" />
   </head>
   <body>
@@ -13,37 +16,56 @@
         <div class="daily-head">
           <h1 id="slate-date">Today</h1>
           <div class="record-line">
-            <strong id="daily-record">0-0</strong>
+            <strong id="daily-record">0-0-0</strong>
             <span>&middot;</span>
             <strong id="daily-net" class="money">$0.00</strong>
             <span>&middot;</span>
             <span>on <span id="daily-staked">$0</span> staked</span>
           </div>
         </div>
+        <section class="stats-grid" aria-label="Performance summary">
+          <article class="stat-card">
+            <div class="card-title">
+              <div class="card-title-label"><span class="dot green"></span><span>Season Record</span></div>
+              <label class="month-filter">
+                <span class="sr-only">Performance month</span>
+                <select id="month-select" aria-label="Performance month"></select>
+                <span class="material-symbols-rounded" aria-hidden="true">keyboard_arrow_down</span>
+              </label>
+            </div>
+            <div class="card-metrics">
+              <div><small>Record</small><strong id="season-record">0-0-0</strong><span id="season-wr">0.0% WR</span></div>
+              <div><small>Net P/L</small><strong id="season-net">$0</strong><span id="season-roi">0.0% ROI</span></div>
+              <div><small>Units</small><strong id="season-units">0.0u</strong><span>1u = $100</span></div>
+            </div>
+            <div id="season-settled" class="settled-count">0 settled picks · No Signal excluded</div>
+          </article>
+
+          <article class="stat-card">
+            <div class="card-title">
+              <div class="card-title-label"><span class="dot violet"></span><span>Top Picks</span></div>
+              <span id="top-period" class="card-period">Current month</span>
+            </div>
+            <div class="card-metrics">
+              <div><small>Record</small><strong id="top-record">0-0-0</strong><span id="top-wr">0.0% WR</span></div>
+              <div><small>Net P/L</small><strong id="top-net">$0</strong><span id="top-roi">0.0% ROI</span></div>
+              <div><small>Units</small><strong id="top-units">0.0u</strong><span>Medium+</span></div>
+            </div>
+            <div id="top-settled" class="settled-count">0 settled picks · No Signal excluded</div>
+          </article>
+        </section>
+
+        <div class="slate-divider">
+          <div>
+            <span class="eyebrow slate-eyebrow">Today’s matchups</span>
+            <p>Open any game to view its tracked markets.</p>
+          </div>
+          <span id="matchup-count" class="matchup-count"></span>
+        </div>
         <div id="pick-list" class="pick-list"></div>
       </section>
 
-      <section class="stats-grid">
-        <article class="stat-card">
-          <div class="card-title"><span class="dot green"></span>Season Overall <span id="season-settled"></span></div>
-          <div class="card-metrics">
-            <div><small>Record</small><strong id="season-record">0-0</strong><span id="season-wr">0.0% WR</span></div>
-            <div><small>Net P/L</small><strong id="season-net">$0</strong><span id="season-roi">0.0% ROI</span></div>
-            <div><small>Units</small><strong id="season-units">0.0u</strong><span>1u = $100</span></div>
-          </div>
-        </article>
-
-        <article class="stat-card">
-          <div class="card-title"><span class="dot violet"></span>Top Picks <span id="top-settled"></span></div>
-          <div class="card-metrics">
-            <div><small>Record</small><strong id="top-record">0-0</strong><span id="top-wr">0.0% WR</span></div>
-            <div><small>Net P/L</small><strong id="top-net">$0</strong><span id="top-roi">0.0% ROI</span></div>
-            <div><small>Units</small><strong id="top-units">0.0u</strong><span>Medium+</span></div>
-          </div>
-        </article>
-      </section>
-
-      <p class="footnote">Net P/L tracks each market pick independently. Scheduled and pass markets do not count until a pick is open and settled.</p>
+      <p class="footnote">Net P/L tracks each market pick independently. Scheduled markets and No Signal results are excluded from performance records.</p>
     </main>
     <script src="/dashboard/app.js"></script>
   </body>

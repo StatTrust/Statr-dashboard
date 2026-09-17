@@ -1,6 +1,7 @@
-const apiPath = "/api/mlb-data";
+const apiPath = "/api/mlb-data?limit=5000";
 const csvPath = "../data/statr-mlb-picks.csv";
 const unitSize = 100;
+const trackingStartDate = "2026-08-21";
 
 const MARKETS = [
   { key: "moneyline", label: "Moneyline" },
@@ -103,8 +104,12 @@ function setMoney(id, value, digits = 0) {
   el.classList.toggle("negative", Number(value) < 0);
 }
 
+function isNoSignal(row) {
+  return row?.status === "no_signal" || /\bno[\s_-]*signal\b/i.test(`${row?.pick || ""} ${row?.analysisText || ""}`);
+}
+
 function stats(rows) {
-  const settled = rows.filter((r) => ["won", "lost", "push"].includes(r.status));
+  const settled = rows.filter((r) => !isNoSignal(r) && ["won", "lost", "push"].includes(r.status));
   const wins = settled.filter((r) => r.status === "won").length;
   const losses = settled.filter((r) => r.status === "lost").length;
   const pushes = settled.filter((r) => r.status === "push").length;
@@ -117,19 +122,19 @@ function stats(rows) {
 
 function activeStake(rows) {
   return rows
-    .filter((r) => ["pending", "won", "lost", "push"].includes(r.status))
+    .filter((r) => !isNoSignal(r) && ["pending", "won", "lost", "push"].includes(r.status))
     .reduce((sum, r) => sum + Number(r.stake || 0), 0);
 }
 
 function renderMetric(prefix, rows) {
   const s = stats(rows);
-  document.getElementById(`${prefix}-record`).textContent = `${s.wins}-${s.losses}${s.pushes ? `-${s.pushes}` : ""}`;
+  document.getElementById(`${prefix}-record`).textContent = `${s.wins}-${s.losses}-${s.pushes}`;
   document.getElementById(`${prefix}-wr`).textContent = `${s.wr.toFixed(1)}% WR`;
   document.getElementById(`${prefix}-roi`).textContent = `${s.roi >= 0 ? "+" : ""}${s.roi.toFixed(1)}% ROI`;
   document.getElementById(`${prefix}-units`).textContent = `${s.net >= 0 ? "+" : ""}${(s.net / unitSize).toFixed(1)}u`;
   setMoney(`${prefix}-net`, s.net, 0);
   const settledEl = document.getElementById(`${prefix}-settled`);
-  if (settledEl) settledEl.textContent = `${s.settled.length} settled`;
+  if (settledEl) settledEl.textContent = `${s.settled.length} settled pick${s.settled.length === 1 ? "" : "s"} · No Signal excluded`;
 }
 
 function cleanPick(value = "") {
@@ -161,6 +166,15 @@ function matchupHtml(row) {
 function gameTime(row) {
   if (!row?.gameTimeUtc) return "Time TBD";
   return new Date(row.gameTimeUtc).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function gameDate(row) {
+  if (!row?.date) return "Date TBD";
+  return new Date(`${row.date}T12:00:00`).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function confidencePct(row) {
@@ -256,28 +270,76 @@ function renderMarketTile(row, market) {
 function renderPicks(rows) {
   const list = document.getElementById("pick-list");
   list.innerHTML = "";
+  const groups = groupGames(rows);
+  document.getElementById("matchup-count").textContent = `${groups.length} matchup${groups.length === 1 ? "" : "s"}`;
   if (!rows.length) {
     list.innerHTML = '<div class="empty-state"><strong>No MLB matchups found</strong><small>The slate will appear here once schedule data is available.</small></div>';
     return;
   }
 
-  for (const group of groupGames(rows)) {
+  groups.forEach((group, index) => {
     const tracked = MARKETS.filter((market) => ["analyzing", "pending", "won", "lost", "push", "no_signal", "error"].includes(group.markets.get(market.key)?.status)).length;
     const item = document.createElement("article");
     item.className = "game-card";
+    const panelId = `market-panel-${index}`;
     item.innerHTML = `
-      <div class="game-header">
+      <button class="game-toggle" type="button" aria-expanded="false" aria-controls="${panelId}">
         <div class="game-heading">
           <div class="matchup-line">${matchupHtml(group.lead)}</div>
-          <div class="game-meta">${gameTime(group.lead)} · ${tracked}/3 markets tracked</div>
+          <div class="game-meta">${gameDate(group.lead)} · ${gameTime(group.lead)} · ${tracked}/3 markets tracked</div>
         </div>
-        <div class="game-due">2hr analysis</div>
-      </div>
-      <div class="market-grid">
-        ${MARKETS.map((market) => renderMarketTile(group.markets.get(market.key), market)).join("")}
+        <span class="toggle-action"><span class="toggle-label">View markets</span><span class="material-symbols-rounded" aria-hidden="true">keyboard_arrow_down</span></span>
+      </button>
+      <div id="${panelId}" class="market-panel" hidden>
+        <div class="market-grid">
+          ${MARKETS.map((market) => renderMarketTile(group.markets.get(market.key), market)).join("")}
+        </div>
       </div>`;
+    const toggle = item.querySelector(".game-toggle");
+    const panel = item.querySelector(".market-panel");
+    toggle.addEventListener("click", () => {
+      const isOpen = toggle.getAttribute("aria-expanded") === "true";
+      toggle.setAttribute("aria-expanded", String(!isOpen));
+      panel.hidden = isOpen;
+      toggle.querySelector(".toggle-label").textContent = isOpen ? "View markets" : "Hide markets";
+    });
     list.appendChild(item);
-  }
+  });
+}
+
+function monthKey(value) {
+  return String(value || "").slice(0, 7);
+}
+
+function monthLabel(value) {
+  return new Date(`${value}-01T12:00:00`).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function configureMonthlyMetrics(rows) {
+  const select = document.getElementById("month-select");
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const months = [...new Set([
+    currentMonth,
+    ...rows.filter((row) => row.date >= trackingStartDate).map((row) => monthKey(row.date)).filter(Boolean),
+  ])].sort().reverse();
+
+  select.innerHTML = months.map((month) => `<option value="${month}">${monthLabel(month)}</option>`).join("");
+  select.value = months.includes(currentMonth) ? currentMonth : months[0];
+
+  const renderSelectedMonth = () => {
+    const selectedMonth = select.value;
+    const monthlyRows = rows.filter((row) => row.date >= trackingStartDate && monthKey(row.date) === selectedMonth);
+    renderMetric("season", monthlyRows);
+    renderMetric("top", monthlyRows.filter((row) => /strong|solid|medium/i.test(`${row.confidence} ${row.pick}`)));
+    document.getElementById("top-period").textContent = monthLabel(selectedMonth);
+  };
+
+  select.addEventListener("change", renderSelectedMonth);
+  renderSelectedMonth();
 }
 
 async function main() {
@@ -304,12 +366,11 @@ async function main() {
     day: "numeric",
     year: "numeric",
   });
-  document.getElementById("daily-record").textContent = `${dailyStats.wins}-${dailyStats.losses}`;
+  document.getElementById("daily-record").textContent = `${dailyStats.wins}-${dailyStats.losses}-${dailyStats.pushes}`;
   document.getElementById("daily-staked").textContent = money(activeStake(daily), 0);
   setMoney("daily-net", dailyStats.net, 2);
   renderPicks(daily);
-  renderMetric("season", rows);
-  renderMetric("top", rows.filter((r) => /strong|solid|medium/i.test(`${r.confidence} ${r.pick}`)));
+  configureMonthlyMetrics(rows);
 }
 
 main();
