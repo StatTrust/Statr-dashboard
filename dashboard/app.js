@@ -177,7 +177,7 @@ function gameTime(row) {
 
 function gameDate(row) {
   if (!row?.date) return "Date TBD";
-  return new Date(`${row.date}T12:00:00`).toLocaleDateString(undefined, {
+  return new Date(row.gameTimeUtc || `${row.date}T12:00:00`).toLocaleDateString(undefined, {
     weekday: "short",
     month: "short",
     day: "numeric",
