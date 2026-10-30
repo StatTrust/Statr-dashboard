@@ -17,16 +17,19 @@ jobs:
         env:
           VERCEL_APP_URL: ${{ secrets.VERCEL_APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: curl --fail --silent --show-error --max-time 290 -H "Authorization: Bearer $CRON_SECRET" "$VERCEL_APP_URL/api/cron-nfl?task=due"
+        run: |
+          curl --fail --silent --show-error --max-time 290 -H "Authorization: Bearer $CRON_SECRET" "$VERCEL_APP_URL/api/cron-nfl?task=due"
       - name: Poll NFL analyses
         if: always()
         env:
           VERCEL_APP_URL: ${{ secrets.VERCEL_APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: curl --fail --silent --show-error --max-time 290 -H "Authorization: Bearer $CRON_SECRET" "$VERCEL_APP_URL/api/cron-nfl?task=poll"
+        run: |
+          curl --fail --silent --show-error --max-time 290 -H "Authorization: Bearer $CRON_SECRET" "$VERCEL_APP_URL/api/cron-nfl?task=poll"
       - name: Settle completed NFL games
         if: always()
         env:
           VERCEL_APP_URL: ${{ secrets.VERCEL_APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: curl --fail --silent --show-error --max-time 290 -H "Authorization: Bearer $CRON_SECRET" "$VERCEL_APP_URL/api/cron-nfl?task=settle"
+        run: |
+          curl --fail --silent --show-error --max-time 290 -H "Authorization: Bearer $CRON_SECRET" "$VERCEL_APP_URL/api/cron-nfl?task=settle"
