@@ -1,94 +1,67 @@
-const endpoint = "/api/analysis-control";
 const storageKey = "statr-dashboard-admin-secret";
-
 const form = document.getElementById("auth-form");
-const secretInput = document.getElementById("admin-secret");
+const input = document.getElementById("admin-secret");
 const panel = document.getElementById("control-panel");
-const statusPill = document.getElementById("status-pill");
-const statusTitle = document.getElementById("status-title");
-const statusDetail = document.getElementById("status-detail");
-const toggleButton = document.getElementById("toggle-button");
-const updatedAt = document.getElementById("updated-at");
 const message = document.getElementById("message");
+let secret = "";
+try { secret = sessionStorage.getItem(storageKey) || ""; } catch {}
 
-let secret = sessionStorage.getItem(storageKey) || "";
-let enabled = false;
-
-function setMessage(value = "", isError = false) {
-  message.textContent = value;
-  message.classList.toggle("error", isError);
-}
-
-async function request(options = {}) {
-  const response = await fetch(endpoint, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${secret}`,
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
+async function request(sport, enabled) {
+  const response = await fetch("/api/analysis-control?sport=" + sport, {
+    method: enabled === undefined ? "GET" : "PATCH",
+    headers: {Authorization:"Bearer " + secret, "Content-Type":"application/json"},
+    body: enabled === undefined ? undefined : JSON.stringify({sport, enabled}),
   });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
+  const body = await response.json();
+  if (!response.ok || body.error) throw new Error(body.error || "Unable to update control.");
   return body;
 }
 
-function render(control) {
-  enabled = control.enabled === true;
-  panel.hidden = false;
-  statusPill.textContent = enabled ? "Active" : "Paused";
-  statusPill.className = `status-pill ${enabled ? "enabled" : "paused"}`;
-  statusTitle.textContent = enabled ? "Automatic analysis is on" : "Automatic analysis is paused";
-  statusDetail.textContent = enabled
-    ? "Due MLB games will compile and queue Moneyline, Spread, and Over/Under analyses."
-    : "Fresh matchups remain available, but the scheduler will not compile or start new paid analyses.";
-  toggleButton.textContent = enabled ? "Pause automatic analysis" : "Resume automatic analysis";
-  toggleButton.classList.toggle("pause", enabled);
-  toggleButton.disabled = false;
-  updatedAt.textContent = control.updatedAt
-    ? `Last changed ${new Date(control.updatedAt).toLocaleString()}`
-    : "No change timestamp is available.";
-}
-
-async function loadControl() {
-  toggleButton.disabled = true;
-  setMessage("Checking analysis control…");
+async function load() {
+  message.textContent = "Checking controls…";
+  panel.hidden = true;
+  panel.replaceChildren();
   try {
-    const control = await request();
-    sessionStorage.setItem(storageKey, secret);
-    render(control);
-    setMessage("");
+    const controls = await Promise.all(["mlb","nfl","nba"].map(async sport => ({sport,...await request(sport)})));
+    for (const control of controls) {
+      const section = document.createElement("section");
+      const title = document.createElement("h2");
+      title.textContent = control.sport.toUpperCase();
+      const detail = document.createElement("p");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "toggle-button";
+      const render = value => {
+        detail.textContent = control.sport === "nba" ? "Coming soon" : value.enabled
+          ? "Automatic Moneyline, Spread, and Total analyses are on."
+          : "Paused. No new paid analyses will start for this sport.";
+        button.textContent = value.enabled ? "Pause " + control.sport.toUpperCase() : "Enable " + control.sport.toUpperCase();
+        button.disabled = control.sport === "nba";
+        button.setAttribute("aria-pressed", String(value.enabled));
+        control.enabled = value.enabled;
+      };
+      render(control);
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        message.textContent = "Saving " + control.sport.toUpperCase() + "…";
+        try {
+          render(await request(control.sport, !control.enabled));
+          message.textContent = control.sport.toUpperCase() + " setting saved.";
+        } catch (error) {
+          message.textContent = error.message;
+          button.disabled = false;
+        }
+      });
+      section.append(title,detail,button);
+      panel.append(section);
+    }
+    panel.hidden = false;
+    message.textContent = "";
+    try { sessionStorage.setItem(storageKey,secret); } catch {}
   } catch (error) {
-    sessionStorage.removeItem(storageKey);
-    panel.hidden = true;
-    setMessage(error.message, true);
+    message.textContent = error.message;
+    try { sessionStorage.removeItem(storageKey); } catch {}
   }
 }
-
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  secret = secretInput.value.trim();
-  if (!secret) return;
-  await loadControl();
-});
-
-toggleButton.addEventListener("click", async () => {
-  toggleButton.disabled = true;
-  setMessage(enabled ? "Pausing automatic analysis…" : "Resuming automatic analysis…");
-  try {
-    const control = await request({
-      method: "PATCH",
-      body: JSON.stringify({ enabled: !enabled }),
-    });
-    render(control);
-    setMessage(control.enabled ? "Automatic analysis resumed." : "Automatic analysis paused.");
-  } catch (error) {
-    toggleButton.disabled = false;
-    setMessage(error.message, true);
-  }
-});
-
-if (secret) {
-  secretInput.value = secret;
-  loadControl();
-}
+form.addEventListener("submit", event => {event.preventDefault(); secret = input.value.trim(); load();});
+if (secret) {input.value = secret; load();}

@@ -17,6 +17,14 @@
   --cyan: #53d6d0;
 }
 
+.tracker-filters { display:flex; flex-wrap:wrap; gap:16px; padding:24px 30px 0; }
+.tracker-filters label { display:grid; gap:7px; color:var(--muted); font-size:12px; font-weight:600; }
+.tracker-filters select, #retry-button { min-height:44px; padding:8px 14px; border:1px solid var(--line-strong); border-radius:9px; background:var(--panel); color:var(--text); font:inherit; }
+.tracker-filters select:focus-visible, #retry-button:focus-visible { outline:2px solid var(--purple); outline-offset:3px; }
+[hidden] { display:none !important; }
+#load-message { margin:12px 30px 0; color:var(--muted); font-size:13px; }
+#retry-button { margin:12px 30px; cursor:pointer; }
+
 * {
   box-sizing: border-box;
 }

@@ -39,15 +39,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    if (req.method === "GET") {
-      return json(res, 200, { ok: true, ...(await readAutoAnalysisControl()) });
-    }
-
     const body = requestBody(req);
+    const sport = String(req.query?.sport || body.sport || "mlb");
+    if (!["mlb", "nfl", "nba"].includes(sport)) return json(res,400,{error:"Invalid sport."});
+    if (req.method === "GET") {
+      return json(res, 200, { ok: true, sport, ...(await readAutoAnalysisControl(sport)) });
+    }
+    if (sport === "nba") return json(res,400,{error:"NBA tracking is coming soon."});
     if (typeof body.enabled !== "boolean") {
       return json(res, 400, { error: "enabled must be a boolean." });
     }
-    const control = await writeAutoAnalysisControl(body.enabled);
+    const control = await writeAutoAnalysisControl(body.enabled, "dashboard_admin", sport);
     return json(res, 200, { ok: true, ...control });
   } catch (err) {
     console.error("analysis-control failed", err);

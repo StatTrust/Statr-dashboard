@@ -1,0 +1,32 @@
+name: Statr NFL Scheduler
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+permissions:
+  contents: read
+concurrency:
+  group: statr-nfl-scheduler
+  cancel-in-progress: false
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Run due NFL analyses
+        env:
+          VERCEL_APP_URL: ${{ secrets.VERCEL_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: curl --fail --silent --show-error --max-time 290 -H "Authorization: Bearer $CRON_SECRET" "$VERCEL_APP_URL/api/cron-nfl?task=due"
+      - name: Poll NFL analyses
+        if: always()
+        env:
+          VERCEL_APP_URL: ${{ secrets.VERCEL_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: curl --fail --silent --show-error --max-time 290 -H "Authorization: Bearer $CRON_SECRET" "$VERCEL_APP_URL/api/cron-nfl?task=poll"
+      - name: Settle completed NFL games
+        if: always()
+        env:
+          VERCEL_APP_URL: ${{ secrets.VERCEL_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: curl --fail --silent --show-error --max-time 290 -H "Authorization: Bearer $CRON_SECRET" "$VERCEL_APP_URL/api/cron-nfl?task=settle"

@@ -2,6 +2,12 @@ const apiPath = "/api/mlb-data?limit=5000";
 const csvPath = "../data/statr-mlb-picks.csv";
 const unitSize = 100;
 const trackingStartDate = "2026-08-21";
+const sportSelect = document.getElementById("sport-select");
+const weekSelect = document.getElementById("week-select");
+let selectedSport = "nfl";
+try { if (localStorage.getItem("statr-tracker-sport") === "mlb") selectedSport = "mlb"; } catch {}
+sportSelect.value = selectedSport;
+let loadVersion = 0;
 
 const MARKETS = [
   { key: "moneyline", label: "Moneyline" },
@@ -158,6 +164,7 @@ function teamMeta(name = "") {
 }
 
 function matchupHtml(row) {
+  if (selectedSport === "nfl") return `<span class="team-main">${row.awayTeam}</span><span class="versus">vs</span><span class="team-alt">${row.homeTeam}</span>`;
   const away = teamMeta(row.awayTeam);
   const home = teamMeta(row.homeTeam);
   return `<span class="team-main">${away.abbr} ${away.name}</span><span class="versus">vs</span><span class="team-alt">${home.abbr} ${home.name}</span>`;
@@ -183,6 +190,7 @@ function confidencePct(row) {
 }
 
 function confidenceLabel(row) {
+  if (row?.status === "not_tracked") return "NOT TRACKED";
   const raw = String(row?.confidence || "").trim();
   if (raw) return raw.replace(/\s*\([^)]*\)/g, "").replace(/[≈~]/g, "").trim().toUpperCase() || "TRACKED";
   if (row?.status === "scheduled") return "NOT QUEUED";
@@ -191,6 +199,7 @@ function confidenceLabel(row) {
 }
 
 function signalText(row) {
+  if (row?.status === "not_tracked") return "No pregame analysis recorded";
   if (!row || row.status === "scheduled") return "Awaiting 2-hour window";
   if (row.status === "analyzing") return "Analysis running";
   if (row.status === "no_signal") return "Pass - No Signal";
@@ -200,6 +209,7 @@ function signalText(row) {
 
 function statusLabel(row) {
   const labels = {
+    not_tracked: "Not tracked",
     scheduled: "Scheduled",
     pending: "Open",
     no_signal: "Pass",
@@ -213,7 +223,7 @@ function statusLabel(row) {
 }
 
 function strengthCount(row) {
-  if (!row || ["scheduled", "no_signal", "error"].includes(row.status)) return 0;
+  if (!row || ["scheduled", "not_tracked", "no_signal", "error"].includes(row.status)) return 0;
   const blob = `${row.confidence} ${row.pick}`.toLowerCase();
   const pct = confidencePct(row);
   if (blob.includes("strong") || pct >= 70) return 3;
@@ -273,7 +283,7 @@ function renderPicks(rows) {
   const groups = groupGames(rows);
   document.getElementById("matchup-count").textContent = `${groups.length} matchup${groups.length === 1 ? "" : "s"}`;
   if (!rows.length) {
-    list.innerHTML = '<div class="empty-state"><strong>No MLB matchups found</strong><small>The slate will appear here once schedule data is available.</small></div>';
+    list.innerHTML = '<div class="empty-state"><strong>No matchups found</strong><small>No games are scheduled for this selection.</small></div>';
     return;
   }
 
@@ -338,39 +348,76 @@ function configureMonthlyMetrics(rows) {
     document.getElementById("top-period").textContent = monthLabel(selectedMonth);
   };
 
-  select.addEventListener("change", renderSelectedMonth);
+  select.onchange = renderSelectedMonth;
   renderSelectedMonth();
 }
 
-async function main() {
-  let rows = [];
-  try {
-    const response = await fetch(apiPath, { cache: "no-store" });
-    if (response.ok) {
-      const payload = await response.json();
-      rows = Array.isArray(payload.rows) ? payload.rows : [];
-    } else {
-      rows = parseCsv(await fetch(csvPath, { cache: "no-store" }).then((r) => (r.ok ? r.text() : "")));
-    }
-  } catch {
-    rows = [];
+async function main({week, season} = {}) {
+  const version = ++loadVersion;
+  const sport = selectedSport;
+  const message = document.getElementById("load-message");
+  const retry = document.getElementById("retry-button");
+  message.textContent = "Loading " + sport.toUpperCase() + " matchups…";
+  retry.hidden = true;
+  weekSelect.disabled = true;
+  document.getElementById("week-filter").hidden = sport !== "nfl";
+  document.getElementById("pick-list").replaceChildren();
+  document.getElementById("matchup-count").textContent = "";
+  document.getElementById("slate-date").textContent = "Loading…";
+  document.getElementById("daily-record").textContent = "—";
+  document.getElementById("daily-staked").textContent = "—";
+  document.getElementById("daily-net").textContent = "—";
+  for (const prefix of ["season", "top"]) {
+    for (const field of ["record","wr","roi","units","net","settled"]) document.getElementById(prefix+"-"+field).textContent = "—";
   }
-  rows = rows.map((row) => ({ ...row, market: normalizeMarket(row.market) }));
-  const dates = [...new Set(rows.map((r) => r.date).filter(Boolean))].sort();
-  const slateDate = dates.at(-1) || new Date().toISOString().slice(0, 10);
-  const daily = rows.filter((r) => r.date === slateDate);
-  const dailyStats = stats(daily);
-  document.getElementById("slate-date").textContent = new Date(`${slateDate}T12:00:00`).toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-  document.getElementById("daily-record").textContent = `${dailyStats.wins}-${dailyStats.losses}-${dailyStats.pushes}`;
-  document.getElementById("daily-staked").textContent = money(activeStake(daily), 0);
-  setMoney("daily-net", dailyStats.net, 2);
-  renderPicks(daily);
-  configureMonthlyMetrics(rows);
+  document.getElementById("month-select").disabled = true;
+  try {
+    const url = sport === "nfl"
+      ? "/api/nfl-data" + (week ? "?week=" + week + "&season=" + season : "")
+      : apiPath;
+    const response = await fetch(url, {cache:"no-store"});
+    if (!response.ok) throw new Error("Unable to load " + sport.toUpperCase() + " results. Please retry.");
+    const payload = await response.json();
+    if (version !== loadVersion) return;
+    const rows = (payload.rows || []).map(row => ({...row, market:normalizeMarket(row.market)}));
+    let slate;
+    if (sport === "nfl") {
+      weekSelect.innerHTML = payload.weeks.map(w => '<option value="' + w.week + '">Week ' + w.week + ' · ' + w.detail + '</option>').join("");
+      weekSelect.value = String(payload.week);
+      weekSelect.dataset.season = payload.season;
+      weekSelect.disabled = false;
+      slate = rows.filter(r => r.week === payload.week && r.season === payload.season);
+      document.getElementById("slate-date").textContent = payload.season + " · Week " + payload.week;
+      document.getElementById("slate-eyebrow").textContent = "NFL · Weekly Slate";
+      document.getElementById("matchups-heading").textContent = "Week " + payload.week + " matchups";
+    } else {
+      const dates = [...new Set(rows.map(r => r.date).filter(Boolean))].sort();
+      const date = dates.at(-1) || new Date().toISOString().slice(0,10);
+      slate = rows.filter(r => r.date === date);
+      document.getElementById("slate-date").textContent = new Date(date+"T12:00:00").toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric",year:"numeric"});
+      document.getElementById("slate-eyebrow").textContent = "MLB · Daily Slate";
+      document.getElementById("matchups-heading").textContent = "Slate matchups";
+    }
+    const summary = stats(slate);
+    document.getElementById("daily-record").textContent = summary.wins+"-"+summary.losses+"-"+summary.pushes;
+    document.getElementById("daily-staked").textContent = money(activeStake(slate),0);
+    setMoney("daily-net",summary.net,2);
+    renderPicks(slate);
+    configureMonthlyMetrics(rows);
+    document.getElementById("month-select").disabled = false;
+    message.textContent = sport === "nfl" ? "Weekly record above · Monthly performance below. Earlier games without saved analyses are not tracked." : "";
+  } catch (error) {
+    if (version !== loadVersion) return;
+    message.textContent = navigator.onLine ? error.message : "You’re offline. Reconnect and retry.";
+    document.getElementById("slate-date").textContent = "Results unavailable";
+    retry.hidden = false;
+  }
 }
-
+sportSelect.addEventListener("change", () => {
+  selectedSport = sportSelect.value;
+  try {localStorage.setItem("statr-tracker-sport",selectedSport);} catch {}
+  main();
+});
+weekSelect.addEventListener("change", () => main({week:Number(weekSelect.value),season:Number(weekSelect.dataset.season)}));
+document.getElementById("retry-button").addEventListener("click", () => main(selectedSport === "nfl" && weekSelect.dataset.season ? {week:Number(weekSelect.value),season:Number(weekSelect.dataset.season)} : {}));
 main();

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Statr MLB Slate</title>
+    <title>Statr Analysis Tracker</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,0,0&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet" />
@@ -12,7 +12,13 @@
   <body>
     <main class="shell">
       <section class="daily-panel">
-        <div class="eyebrow">Daily Slate</div>
+        <div class="tracker-filters">
+          <label>Sport<select id="sport-select"><option value="nfl">NFL</option><option value="mlb">MLB</option><option value="nba" disabled>NBA · Coming soon</option></select></label>
+          <label id="week-filter">NFL week<select id="week-select" disabled><option>Loading weeks…</option></select></label>
+        </div>
+        <p id="load-message" role="status" aria-live="polite"></p>
+        <button id="retry-button" type="button" hidden>Retry</button>
+        <div id="slate-eyebrow" class="eyebrow">Weekly Slate</div>
         <div class="daily-head">
           <h1 id="slate-date">Today</h1>
           <div class="record-line">
@@ -57,7 +63,7 @@
 
         <div class="slate-divider">
           <div>
-            <span class="eyebrow slate-eyebrow">Today’s matchups</span>
+            <span id="matchups-heading" class="eyebrow slate-eyebrow">This week’s matchups</span>
             <p>Open any game to view its tracked markets.</p>
           </div>
           <span id="matchup-count" class="matchup-count"></span>
