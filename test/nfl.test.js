@@ -25,7 +25,7 @@ test("NFL controls fail closed before schedule, compile, or paid jobs", async ()
   assert.equal(count,1);
 });
 test("three NFL markets use NFL identity and isolated storage; duplicates are skipped", async () => {
-  const writes=[], jobs=[], boards=fixture();
+  const writes=[], jobs=[], compiles=[], boards=fixture();
   const id=normalizeNflBoard(boards).games[0].matchupId;
   let saved=[];
   global.fetch=async (url,options={}) => {
@@ -38,13 +38,25 @@ test("three NFL markets use NFL identity and isolated storage; duplicates are sk
     assert.ok(!u.includes("statr_mlb_picks"));
     if(u.includes("espn.com")) return reply(boards);
     if(u.includes("route=registry")) return reply({matchups:[id]});
-    if(u.includes("route=compile")) {assert.equal(JSON.parse(options.body).sport,"nfl");return reply({_statgptVector:{vectorStoreId:"vs_test"}});}
+    if(u.includes("route=compile")) {compiles.push(JSON.parse(options.body));assert.equal(JSON.parse(options.body).sport,"nfl");return reply({compiledMarkdown:"# Packet",_statgptVector:{vectorStoreId:"vs_test"}});}
     if(u.includes("route=jobs")) {const job=JSON.parse(options.body); jobs.push(job);return reply({job_id:"job_"+jobs.length});}
     throw new Error(u);
   };
   await runDueAnalyses({sport:"nfl"});
   assert.equal(jobs.length,3);assert.equal(writes.length,3);
   assert.deepEqual(jobs.map(j=>j.betMode),["moneyline","spread","total"]);
+  assert.deepEqual(compiles.map(c=>c.betMode),["moneyline","spread","total"]);
+  for(let i=0;i<3;i++) {
+    assert.equal(compiles[i].prompt,jobs[i].promptText);
+    assert.deepEqual(compiles[i].categories,jobs[i].categories);
+    assert.equal(compiles[i].returnCompiled,true);
+    assert.equal(compiles[i].includeRaw,true);
+    assert.equal(jobs[i].userMessage,"Start Analysis");
+    assert.equal(jobs[i].matchupLabel,"KC @ DEN");
+    assert.equal(jobs[i].intent,"analysis_request");
+    assert.equal(jobs[i].compiledText,"# Packet");
+    assert.equal(jobs[i].liveContextRequested,false);
+  }
   for(const j of jobs){assert.equal(j.sport,"nfl");assert.equal(j.matchupId,id);assert.equal(j.vectorStoreId,"vs_test");}
   for(const r of writes){assert.equal(r.season,2026);assert.equal(r.week,8);assert.equal(r.status,"analyzing");}
   saved=writes;
